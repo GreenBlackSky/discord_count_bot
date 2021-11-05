@@ -4,7 +4,7 @@ import logging
 
 from dotenv import load_dotenv
 
-from DiscordCountBot import discordCountBot
+from DiscordCountBot import CountBot
 
 
 fileHandler = logging.FileHandler(
@@ -30,4 +30,4 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
 
-discordCountBot.run(TOKEN)
+CountBot().run(TOKEN)

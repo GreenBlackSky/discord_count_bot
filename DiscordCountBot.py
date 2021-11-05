@@ -1,32 +1,37 @@
 import asyncio
 import logging
+import re
 
-from discord.ext import commands
+import discord
 from num2words import num2words
-
-from utils import int_arg
 
 
 logger = logging.getLogger('discord')
-discordCountBot = commands.Bot(command_prefix='!')
+TEMPLATE = r"^(<@\![0-9]{18}> )?count to [0-9]+$"
 
 
-@discordCountBot.command(name="count", help="Count to given number")
-@int_arg
-async def count(ctx: commands.context.Context, countdown: int):
-    logger.info(f"{ctx.author}: {countdown}")
+class CountBot(discord.Client):
+    async def on_message(self, message: discord.Message):
+        if message.author == self:
+            return
+        if isinstance(message.channel, discord.channel.DMChannel):
+            logger.info(f"{message.author} in DM: {message.content}")
+        elif self.user in message.mentions:
+            logger.info(f"{message.author} tagged bot: {message.content}")
+        else:
+            return
 
-    for i in range(countdown):
-        await asyncio.sleep(1)
-        message = num2words(i + 1)
-        await ctx.send(message)
-        logger.info(f"counting to {countdown} for {ctx.author}: {message}")
+        if re.fullmatch(TEMPLATE, message.content) is None:
+            return
 
-    logger.info(f"countdoun to {countdown} for {ctx.author} finished")
+        countdown = int(message.content.split()[-1])
 
+        for i in range(countdown):
+            await asyncio.sleep(1)
+            reply = num2words(i + 1)
+            await message.channel.send(reply)
+            logger.info(
+                f"counting to {countdown} for {message.author}: {reply}"
+            )
 
-@count.error
-async def error_handler(ctx, error):
-    await ctx.send(error)
-    logger.info(f"answering to {ctx.author}: {error}")
-    return
+        logger.info(f"countdoun to {countdown} for {message.author} finished")
