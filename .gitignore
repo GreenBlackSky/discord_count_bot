@@ -1,5 +1,5 @@
 *.env
 __pycache__
-menv
+bot_env
 *.log
 *postgres_data

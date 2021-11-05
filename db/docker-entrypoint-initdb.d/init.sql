@@ -1,6 +1,9 @@
-CREATE TABLE countdowns (
+CREATE TABLE tasks (
     id SERIAL PRIMARY KEY,
-    chanell_id BIGINT NOT NULL,
+    author VARCHAR(200) NOT NULL,
+    channel_id BIGINT NOT NULL,
+    is_dm BOOLEAN NOT NULL,
     start_time TIMESTAMP NOT NULL,
-    countdown INT
+    end_time TIMESTAMP NOT NULL,
+    count INT
 );
