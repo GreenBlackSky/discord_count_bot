@@ -22,6 +22,7 @@ class CountBot(discord.Client):
             return
 
         if re.fullmatch(TEMPLATE, message.content) is None:
+            logger.info(f"{message.content} is not a command")
             return
 
         countdown = int(message.content.split()[-1])
