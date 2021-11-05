@@ -5,5 +5,6 @@ CREATE TABLE tasks (
     is_dm BOOLEAN NOT NULL,
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP NOT NULL,
-    count INT
+    count INT NOT NULL,
+    canceled BOOLEAN NOT NULL DEFAULT FALSE
 );
