@@ -1,18 +1,21 @@
 import asyncio
 import logging
 import re
+import datetime
 
 import discord
 from num2words import num2words
 
+from db_hanler import dbConnection
+
 
 logger = logging.getLogger('discord')
-TEMPLATE = r"^(<@\![0-9]{18}> )?count to [0-9]+$"
+TEMPLATE = r"^(<@\![0-9]{18}> )?count to [0-9]{4}$"
 
 
 class CountBot(discord.Client):
     async def on_message(self, message: discord.Message):
-        if message.author == self:
+        if message.author == self.user:
             return
         if isinstance(message.channel, discord.channel.DMChannel):
             logger.info(f"{message.author} in DM: {message.content}")
@@ -26,6 +29,14 @@ class CountBot(discord.Client):
             return
 
         countdown = int(message.content.split()[-1])
+        Model = dbConnection.getCountdownModel()
+        countdownDB = Model(
+            chanell_id=message.channel.id,
+            start_time=datetime.datetime.now(),
+            countdown=int(message.content.split()[-1])
+        )
+        dbConnection.session.add(countdownDB)
+        dbConnection.session.commit()
 
         for i in range(countdown):
             await asyncio.sleep(1)
