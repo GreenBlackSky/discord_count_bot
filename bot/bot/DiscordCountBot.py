@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime
 import logging
 import re
+import traceback
 
 import discord
 from num2words import num2words
@@ -27,9 +28,7 @@ class CountBot(discord.Client):
     async def on_ready(self):
         """Resume active tasks."""
         for task in dbConnection.get_active_tasks():
-            logger.info(
-                f"continuing counting for {task.author} in {task.channel_id}"
-            )
+            logger.info(f"continuing counting for {task.author} in {task.channel_id}")
             self._active_tasks[task.channel_id] = asyncio.create_task(
                 self.start_counting(task)
             )
@@ -38,7 +37,7 @@ class CountBot(discord.Client):
         """
         React to user message.
 
-        Parse message and if it is command, process it.
+        Parse message and if it is a command, process it.
         """
         if message.author == self.user:
             return
@@ -66,15 +65,8 @@ class CountBot(discord.Client):
         """Start countdown in channel if it is not alredy on."""
         if channel_id in self._active_tasks:
             await message.channel.send("I am already counting here.")
-            await message.channel.send(
-                "Either send command to another chat or stop countdown here."
-            )
-            logger.info(
-                "{} attempted to start second countdown in {}".format(
-                    message.author,
-                    channel_id
-                )
-            )
+            await message.channel.send("Either send command to another chat or stop countdown here.")
+            logger.info(f"{message.author} attempted to start second countdown in {channel_id}")
             return
 
         task = dbConnection.add_task(
@@ -83,9 +75,7 @@ class CountBot(discord.Client):
             count=int(message.content.split()[-1]),
             is_dm=is_dm
         )
-        logger.info(
-            f"start counting for {task.author} in {task.channel_id}"
-        )
+        logger.info(f"start counting for {task.author} in {task.channel_id}")
         self._active_tasks[task.channel_id] = asyncio.create_task(
             self.start_counting(task)
         )
@@ -93,19 +83,14 @@ class CountBot(discord.Client):
     async def process_stop_command(self, message: discord.Message, channel_id):
         """Stop countdown if there is one."""
         if channel_id not in self._active_tasks:
-            await message.channel.send(
-                "I am not currently counting in this chat."
-            )
-            logger.info(
-                "{} attempted to stop non-existant countdown in {}".format(
-                    message.author, message.channel.id
-                )
-            )
+            await message.channel.send("I am not currently counting in this chat.")
+            logger.info(f"{message.author} attempted to stop non-existant countdown in {message.channel.id}")
             return
 
         self._active_tasks[channel_id].cancel()
         del self._active_tasks[channel_id]
         dbConnection.cancel_task(channel_id)
+        await message.channel.send("Countdown stopped.")
 
     async def not_a_command(self, message: discord.Message):
         """Notify user that his command is not a command."""
@@ -127,9 +112,17 @@ class CountBot(discord.Client):
             await channel.send(num2words(i + 1))
             await asyncio.sleep(1)
 
+        await channel.send("Countdown finished.")
         del self._active_tasks[task.channel_id]
-        logger.info("finished counting to {} for {} in {}".format(
-            task.count,
-            task.author,
-            task.channel_id
-        ))
+        logger.info(f"finished counting to {task.count} for {task.author} in {task.channel_id}")
+
+    async def on_error(self, event_method, *args, **kwargs):
+        """Save error log in db."""
+        trace = traceback.format_exc()
+        now = datetime.utcnow()
+        if event_method == "on_message":
+            dbConnection.log_command_error(args[0], trace, now)
+            logger.error(f'Command error: {args[0]} : {trace}')
+        else:
+            dbConnection.log_general_error(event_method, f"{args}, {kwargs}", trace, now)
+            logger.error(f'Unknown error: {event_method}, {args}, {kwargs}, {trace}')

@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 import logging
+import discord
 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
@@ -9,9 +10,10 @@ from sqlalchemy import create_engine
 from sqlalchemy import Column, Integer, String, DateTime, Boolean
 
 logger = logging.getLogger('discord')
+Base = declarative_base()
 
 
-class TaskModel(declarative_base()):
+class TaskModel(Base):
     """Counting task model for database."""
 
     __tablename__ = 'tasks'
@@ -31,6 +33,33 @@ class TaskModel(declarative_base()):
 channel_id: {self.channel_id}, is_dm: {self.is_dm}, \
 start_time: {self.start_time}, end_time: {self.end_time}, \
 count: {self.count}, canceled: {self.canceled}>"
+
+
+class GeneralErrorModel(Base):
+    """Any non-command error."""
+
+    __tablename__ = 'general_errors'
+
+    id = Column(Integer, primary_key=True)
+    time = Column(DateTime)
+    method = Column(String(200))
+    error_info = Column(String(2000))
+    traceback = Column(String(2000))
+
+
+class CommandErrorModel(Base):
+    """Error while processing command."""
+
+    __tablename__ = 'command_errors'
+
+    id = Column(Integer, primary_key=True)
+    command = Column(String(200))
+    author_name = Column(String(200))
+    author_id = Column(Integer)
+    channel_id = Column(Integer)
+    is_dm = Column(Boolean)
+    time = Column(DateTime)
+    traceback = Column(String(2000))
 
 
 class DBConnection:
@@ -89,6 +118,33 @@ class DBConnection:
         task.canceled = True
         self._session.commit()
         logger.info(f"task canceled: {task}")
+
+    def log_general_error(self, method, error_info, trace, time):
+        """Log general error into db."""
+        error = GeneralErrorModel(
+            time=datetime.utcnow(),
+            method=method[:200],
+            error_info=error_info[:2000],
+            traceback=trace[:2000]
+        )
+        self._session.add(error)
+        self._session.commit()
+
+    def log_command_error(self, message: discord.Message, trace, time):
+        """Log command error."""
+        is_dm = isinstance(message.channel, discord.channel.DMChannel)
+        channel_id = message.author.id if is_dm else message.channel.id
+        error = CommandErrorModel(
+            command=message.content[:200],
+            author_name=message.author.display_name[:200],
+            author_id=message.author.id,
+            channel_id=channel_id,
+            is_dm=is_dm,
+            time=datetime.utcnow(),
+            traceback=trace[:2000]
+        )
+        self._session.add(error)
+        self._session.commit()
 
 
 dbConnection = DBConnection()
