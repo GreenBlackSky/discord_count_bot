@@ -77,20 +77,19 @@ class DBConnection:
         connection_string = "postgresql+asyncpg://{}:{}@{}:{}/{}".format(
             user, password, host, port, db
         )
-        engine = create_async_engine(connection_string, future=True, echo=True)
+        engine = create_async_engine(connection_string, future=True)
         self._session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-    async def add_task(self, author: discord.Member, channel_id, count, is_dm):
+    async def add_task(self, author: discord.Member, channel_id, count, is_dm, time):
         """Add new task to db."""
-        now = datetime.utcnow()
         async with self._session() as session:
             task = TaskModel(
                 author_name=author.display_name[:200],
                 author_id=author.id,
                 channel_id=channel_id,
                 is_dm=is_dm,
-                start_time=now,
-                end_time=now + timedelta(seconds=count),
+                start_time=time,
+                end_time=time + timedelta(seconds=count),
                 count=count,
                 canceled=False
             )

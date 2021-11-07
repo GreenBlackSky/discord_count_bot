@@ -28,7 +28,7 @@ class CountBot(discord.Client):
     async def on_ready(self):
         """Resume active tasks."""
         for (task,) in await dbConnection.get_active_tasks():
-            logger.info(f"continuing counting for {task.author_name} in {task.channel_id}")
+            logger.info(f"continuing task {task}")
             self._active_tasks[task.channel_id] = asyncio.create_task(
                 self.start_counting(task)
             )
@@ -73,9 +73,10 @@ class CountBot(discord.Client):
             author=message.author,
             channel_id=channel_id,
             count=int(message.content.split()[-1]),
-            is_dm=is_dm
+            is_dm=is_dm,
+            time=message.created_at
         )
-        logger.info(f"start counting for {task.author_name} in {task.channel_id}")
+        logger.info(f"start task: {task}")
         self._active_tasks[task.channel_id] = asyncio.create_task(
             self.start_counting(task)
         )
@@ -114,7 +115,7 @@ class CountBot(discord.Client):
 
         await channel.send("Countdown finished.")
         del self._active_tasks[task.channel_id]
-        logger.info(f"finished counting to {task.count} for {task.author_name} in {task.channel_id}")
+        logger.info(f"task finished :{task}")
 
     async def on_error(self, event_method, *args, **kwargs):
         """Save error log in db."""
