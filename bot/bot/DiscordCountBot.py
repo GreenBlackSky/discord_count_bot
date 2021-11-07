@@ -1,7 +1,7 @@
 """Module conatins the core bot logic."""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import re
 import traceback
@@ -106,12 +106,20 @@ class CountBot(discord.Client):
         else:
             channel = self.get_channel(task.channel_id)
 
-        for i in range(
-            int((datetime.utcnow() - task.start_time).total_seconds()),
-            task.count
-        ):
-            await channel.send(num2words(i + 1))
-            await asyncio.sleep(1)
+        now = datetime.utcnow()
+        start = task.start_time
+        delta = now - start
+        next_time = start + delta
+        for i in range(int(delta.total_seconds()), task.count):
+            asyncio.create_task(channel.send(num2words(i + 1)))
+            # dynamic sleep period somehow makes it worse 0_o
+            sleep_for = 1
+            # now = datetime.utcnow()
+            # next_time += timedelta(seconds=1)
+            # sleep_for = (next_time - now).total_seconds()
+            # if sleep_for < 0.5:
+            #     continue
+            await asyncio.sleep(sleep_for)
 
         await channel.send("Countdown finished.")
         del self._active_tasks[task.channel_id]

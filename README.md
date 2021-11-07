@@ -29,11 +29,26 @@ Tag bot in any room and print command, or write it DM.
 
 ## Logic
 
+Bot monitors every message in the guild and DM. First it does check the message is adressed to it. If it does, bot checks if it is a command. If it is a command to start countdown, bot writes it's new task to database. Then it starts counting coroutine.
+
+Upon starting, bot checks if there is any tasks in database, that should be done now. If threre are any, it start's performing them.
+
+If an error occures, bot logs it into database as well.
+
+If you look closely, you may notice that interval between messages can sometimes be a little more than a second. Unfortunately, I haven't manged to solve this problem in time. Using dynamic interval leads to an unstability in interval changes. I decided to allow machine do things when it sees suitable. For now.
+
 ## Maintance
 
 There are some ways to monitor bot's activity. 
 
-* Pgadmin allows to look into bot's database. Go to http://localhost:5050/ , use `PGADMIN_DEFAULT_EMAIL` and `PGADMIN_DEFAULT_PASSWORD` from your `config.env` to log in. Then create server, use standart postgresql port (5432) and host from `docker-compose.yaml` (`db`). Database name, username and password, again, take from `config.env` (`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` correspondingly).
+* Pgadmin allows to look into bot's database. Go to http://localhost:5050/ (pgadmin takes a minute or two to start, don't rush it) , use `PGADMIN_DEFAULT_EMAIL` and `PGADMIN_DEFAULT_PASSWORD` from your `config.env` to log in. Then create server, use standart postgresql port (5432) and host from `docker-compose.yaml` (`db`). Database name, username and password, again, take from `config.env` (`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` correspondingly).
+
+* Prometheus should have been used to monitor number bot, but I didn't manage to implement this idea in life( Prometheus is here, though, you can go to http://localhost:9090/ and watch it yourself, it's just that it doesn't monitor anything yet. But the idea is to monitor folowing metrics:
+  * number of given commands
+  * number of canceled requests
+  * number of wrong commands (like when someone asks bot to spot, while it is not counting)
+  * distribution of count values
+  * counting loop iteration time
 
 ## Database structure
 
@@ -50,3 +65,4 @@ Bot is container-based application. It is consists of following containers:
 * bot - python 3.9-slim-buster based container, that contains all application logic. While bot is in development, folder with code is not copied, but mapped as a volume. This way there is no need to rebuild whole container every time we change code. Upon release, though, source code should be copied into container.
 * postgres - standart postgresql container. Only interesting bit here is an `init.sql` file, that contains database structure.
 * pgadmin - it contains tool to administrate local database.
+* prometheus - monitoring tool, in development.
