@@ -27,8 +27,8 @@ class CountBot(discord.Client):
 
     async def on_ready(self):
         """Resume active tasks."""
-        for task in dbConnection.get_active_tasks():
-            logger.info(f"continuing counting for {task.author} in {task.channel_id}")
+        for (task,) in await dbConnection.get_active_tasks():
+            logger.info(f"continuing counting for {task.author_name} in {task.channel_id}")
             self._active_tasks[task.channel_id] = asyncio.create_task(
                 self.start_counting(task)
             )
@@ -69,13 +69,13 @@ class CountBot(discord.Client):
             logger.info(f"{message.author} attempted to start second countdown in {channel_id}")
             return
 
-        task = dbConnection.add_task(
-            author=str(message.author),
+        task = await dbConnection.add_task(
+            author=message.author,
             channel_id=channel_id,
             count=int(message.content.split()[-1]),
             is_dm=is_dm
         )
-        logger.info(f"start counting for {task.author} in {task.channel_id}")
+        logger.info(f"start counting for {task.author_name} in {task.channel_id}")
         self._active_tasks[task.channel_id] = asyncio.create_task(
             self.start_counting(task)
         )
@@ -89,7 +89,7 @@ class CountBot(discord.Client):
 
         self._active_tasks[channel_id].cancel()
         del self._active_tasks[channel_id]
-        dbConnection.cancel_task(channel_id)
+        await dbConnection.cancel_task(channel_id)
         await message.channel.send("Countdown stopped.")
 
     async def not_a_command(self, message: discord.Message):
@@ -114,15 +114,14 @@ class CountBot(discord.Client):
 
         await channel.send("Countdown finished.")
         del self._active_tasks[task.channel_id]
-        logger.info(f"finished counting to {task.count} for {task.author} in {task.channel_id}")
+        logger.info(f"finished counting to {task.count} for {task.author_name} in {task.channel_id}")
 
     async def on_error(self, event_method, *args, **kwargs):
         """Save error log in db."""
         trace = traceback.format_exc()
-        now = datetime.utcnow()
         if event_method == "on_message":
-            dbConnection.log_command_error(args[0], trace, now)
+            await dbConnection.log_command_error(args[0], trace)
             logger.error(f'Command error: {args[0]} : {trace}')
         else:
-            dbConnection.log_general_error(event_method, f"{args}, {kwargs}", trace, now)
+            await dbConnection.log_general_error(event_method, f"{args}, {kwargs}", trace)
             logger.error(f'Unknown error: {event_method}, {args}, {kwargs}, {trace}')

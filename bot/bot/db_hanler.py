@@ -4,10 +4,11 @@ from datetime import datetime, timedelta
 import logging
 import discord
 
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select, update, and_
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, BigInteger
 
 logger = logging.getLogger('discord')
 Base = declarative_base()
@@ -19,8 +20,9 @@ class TaskModel(Base):
     __tablename__ = 'tasks'
 
     id = Column(Integer, primary_key=True)
-    author = Column(String(200))
-    channel_id = Column(Integer)
+    author_name = Column(String(200))
+    author_id = Column(BigInteger)
+    channel_id = Column(BigInteger)
     is_dm = Column(Boolean)
     start_time = Column(DateTime)
     end_time = Column(DateTime)
@@ -29,7 +31,8 @@ class TaskModel(Base):
 
     def __repr__(self):
         """Print task."""
-        return f"<id: {self.id}, author: {self.author}, \
+        return f"<Counting task id: {self.id}, \
+author name: {self.author_name}, author id: {self.author_id}, \
 channel_id: {self.channel_id}, is_dm: {self.is_dm}, \
 start_time: {self.start_time}, end_time: {self.end_time}, \
 count: {self.count}, canceled: {self.canceled}>"
@@ -55,8 +58,8 @@ class CommandErrorModel(Base):
     id = Column(Integer, primary_key=True)
     command = Column(String(200))
     author_name = Column(String(200))
-    author_id = Column(Integer)
-    channel_id = Column(Integer)
+    author_id = Column(BigInteger)
+    channel_id = Column(BigInteger)
     is_dm = Column(Boolean)
     time = Column(DateTime)
     traceback = Column(String(2000))
@@ -67,84 +70,88 @@ class DBConnection:
 
     def __init__(self):
         """Create new uninitialized handler."""
-        self._session: Session = None
+        self._session: AsyncSession = None
 
     def init_connection(self, user, password, host, port, db):
         """Connect to actual database."""
-        connection_string = "postgresql://{}:{}@{}:{}/{}".format(
+        connection_string = "postgresql+asyncpg://{}:{}@{}:{}/{}".format(
             user, password, host, port, db
         )
-        engine = create_engine(connection_string)
-        self._session = Session(engine)
+        engine = create_async_engine(connection_string, future=True, echo=True)
+        self._session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-    def add_task(self, author, channel_id, count, is_dm):
+    async def add_task(self, author: discord.Member, channel_id, count, is_dm):
         """Add new task to db."""
         now = datetime.utcnow()
-        task = TaskModel(
-            author=author,
-            channel_id=channel_id,
-            is_dm=is_dm,
-            start_time=now,
-            end_time=now + timedelta(seconds=count),
-            count=count,
-            canceled=False
-        )
-        self._session.add(task)
-        self._session.commit()
-        logger.info(f"task added to db: {task}")
-        return task
+        async with self._session() as session:
+            task = TaskModel(
+                author_name=author.display_name[:200],
+                author_id=author.id,
+                channel_id=channel_id,
+                is_dm=is_dm,
+                start_time=now,
+                end_time=now + timedelta(seconds=count),
+                count=count,
+                canceled=False
+            )
+            session.add(task)
+            await session.commit()
+            logger.info(f"task added to db: {task}")
+            return task
 
-    def get_active_tasks(self):
+    async def get_active_tasks(self):
         """Get all active tasks."""
         now = datetime.utcnow()
-        return self._session\
-            .query(TaskModel)\
-            .filter(TaskModel.end_time > now)\
-            .filter(TaskModel.canceled == False)\
-            .all()
+        async with self._session() as session:
+            query = select(TaskModel).where(and_(
+                    TaskModel.end_time > now,
+                    TaskModel.canceled == False
+            ))
+            result = await session.execute(query)
+            return result
 
-    def cancel_task(self, channel_id):
+    async def cancel_task(self, channel_id):
         """Cancel active task in given channel."""
         now = datetime.utcnow()
-        task = self._session\
-            .query(TaskModel)\
-            .filter(TaskModel.channel_id == channel_id)\
-            .filter(TaskModel.end_time > now)\
-            .filter(TaskModel.canceled == False)\
-            .first()
-        if task is None:
-            logger.info(f"can't cancel task in {channel_id}")
-            return
-        task.canceled = True
-        self._session.commit()
-        logger.info(f"task canceled: {task}")
+        async with self._session() as session:
+            query = update(TaskModel)\
+                .where(and_(
+                    TaskModel.channel_id == channel_id,
+                    TaskModel.end_time > now,
+                    TaskModel.canceled == False))\
+                .values(canceled=True)
+            await session.execute(query)
+            await session.commit()
+        logger.info(f"task canceled")
 
-    def log_general_error(self, method, error_info, trace, time):
+    async def log_general_error(self, method, error_info, trace):
         """Log general error into db."""
-        error = GeneralErrorModel(
-            time=datetime.utcnow(),
-            method=method[:200],
-            error_info=error_info[:2000],
-            traceback=trace[:2000]
-        )
-        self._session.add(error)
-        self._session.commit()
+        async with self._session() as session:
+            error = GeneralErrorModel(
+                time=datetime.utcnow(),
+                method=method[:200],
+                error_info=error_info[:2000],
+                traceback=trace[:2000]
+            )
+            session.add(error)
+            await session.commit()
 
-    def log_command_error(self, message: discord.Message, trace, time):
+    async def log_command_error(self, message: discord.Message, trace):
         """Log command error."""
         is_dm = isinstance(message.channel, discord.channel.DMChannel)
         channel_id = message.author.id if is_dm else message.channel.id
-        error = CommandErrorModel(
-            command=message.content[:200],
-            author_name=message.author.display_name[:200],
-            author_id=message.author.id,
-            channel_id=channel_id,
-            is_dm=is_dm,
-            time=datetime.utcnow(),
-            traceback=trace[:2000]
-        )
-        self._session.add(error)
-        self._session.commit()
+        async with self._session() as session:
+            error = CommandErrorModel(
+                command=message.content[:200],
+                author_name=message.author.display_name[:200],
+                author_id=message.author.id,
+                channel_id=channel_id,
+                is_dm=is_dm,
+                time=datetime.utcnow(),
+                traceback=trace[:2000]
+            )
+            session.add(error)
+            await session.commit()
 
 
 dbConnection = DBConnection()

@@ -1,6 +1,7 @@
 CREATE TABLE tasks (
     id SERIAL PRIMARY KEY,
-    author VARCHAR(200) NOT NULL,
+    author_name VARCHAR(200) NOT NULL,
+    author_id BIGINT NOT NULL,
     channel_id BIGINT NOT NULL,
     is_dm BOOLEAN NOT NULL,
     start_time TIMESTAMP NOT NULL,
