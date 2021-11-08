@@ -23,6 +23,7 @@ To start, add `config.env` file to the root. It must contain folowing parameters
 Than, simply run `docker-compose -f "docker-compose.yaml" up -d --build` to build docker containers and run bot.
 
 ## Commands
+
 Tag bot in any room and print command, or write it DM.
  * `count to n` where n in a positive integer. Bot will respond by counting from one to given number, one message per second. Bot will not perform two countdowns in one room at one time. But it can count in any number of rooms simultaneously.
  * `stop` will make bot stop counting in given room.
@@ -37,18 +38,18 @@ If an error occures, bot logs it into database as well.
 
 If you look closely, you may notice that interval between messages can sometimes be a little more than a second. Unfortunately, I haven't manged to solve this problem in time. Using dynamic interval leads to an unstability in interval changes. I decided to allow machine do things when it sees suitable. For now.
 
-## Maintance
+## Maintenance
 
 There are some ways to monitor bot's activity. 
 
 * Pgadmin allows to look into bot's database. Go to http://localhost:5050/ (pgadmin takes a minute or two to start, don't rush it) , use `PGADMIN_DEFAULT_EMAIL` and `PGADMIN_DEFAULT_PASSWORD` from your `config.env` to log in. Then create server, use standart postgresql port (5432) and host from `docker-compose.yaml` (`db`). Database name, username and password, again, take from `config.env` (`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` correspondingly).
 
-* Prometheus should have been used to monitor number bot, but I didn't manage to implement this idea in life( Prometheus is here, though, you can go to http://localhost:9090/ and watch it yourself, it's just that it doesn't monitor anything yet. But the idea is to monitor folowing metrics:
+* Prometheus is used to monitor number bot. You can go to http://localhost:9090/ and watch it yourself, it monitors the  folowing metrics:
   * number of given commands
+  * number of given invalid commands
   * number of canceled requests
   * number of wrong commands (like when someone asks bot to spot, while it is not counting)
   * distribution of count values
-  * counting loop iteration time
 
 ## Database structure
 

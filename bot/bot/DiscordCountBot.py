@@ -8,6 +8,7 @@ import traceback
 
 import discord
 from num2words import num2words
+from prometheus_handler import prometheus
 
 from db_hanler import dbConnection, TaskModel
 
@@ -50,7 +51,6 @@ class CountBot(discord.Client):
             logger.info(f"{message.author} tagged bot: {message.content}")
         else:
             return
-
         channel_id = message.author.id if is_dm else message.channel.id
         if re.fullmatch(COUNT_TEMPLATE, message.content):
             await self.process_start_command(message, channel_id, is_dm)
@@ -58,6 +58,7 @@ class CountBot(discord.Client):
             await self.process_stop_command(message, channel_id)
         else:
             await self.not_a_command(message)
+        prometheus.commands.inc()
 
     async def process_start_command(
         self, message: discord.Message, channel_id, is_dm
@@ -67,12 +68,15 @@ class CountBot(discord.Client):
             await message.channel.send("I am already counting here.")
             await message.channel.send("Either send command to another chat or stop countdown here.")
             logger.info(f"{message.author} attempted to start second countdown in {channel_id}")
+            prometheus.error_starts.inc()
             return
 
+        count = int(message.content.split()[-1])
+        prometheus.countdowns.observe(count)
         task = await dbConnection.add_task(
             author=message.author,
             channel_id=channel_id,
-            count=int(message.content.split()[-1]),
+            count=count,
             is_dm=is_dm,
             time=message.created_at
         )
@@ -86,18 +90,21 @@ class CountBot(discord.Client):
         if channel_id not in self._active_tasks:
             await message.channel.send("I am not currently counting in this chat.")
             logger.info(f"{message.author} attempted to stop non-existant countdown in {message.channel.id}")
+            prometheus.error_stops.inc()
             return
 
         self._active_tasks[channel_id].cancel()
         del self._active_tasks[channel_id]
         await dbConnection.cancel_task(channel_id)
         await message.channel.send("Countdown stopped.")
+        prometheus.canceled.inc()
 
     async def not_a_command(self, message: discord.Message):
         """Notify user that his command is not a command."""
         reply = f"{message.content} is not a command"
         await message.channel.send(reply)
         logger.info(reply)
+        prometheus.invalid_commands.inc()
 
     async def start_counting(self, task: TaskModel):
         """Send user number each second."""
@@ -134,3 +141,6 @@ class CountBot(discord.Client):
         else:
             await dbConnection.log_general_error(event_method, f"{args}, {kwargs}", trace)
             logger.error(f'Unknown error: {event_method}, {args}, {kwargs}, {trace}')
+
+
+client = CountBot()
