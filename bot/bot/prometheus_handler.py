@@ -1,3 +1,5 @@
+import logging
+
 from prometheus_client import make_asgi_app, Counter, Histogram, generate_latest
 from quart import Quart
 
@@ -18,6 +20,8 @@ class Prometheus:
 
 prometheus = Prometheus()
 quart = Quart(__name__)
+logging.getLogger('quart.app').setLevel(logging.ERROR)
+logging.getLogger('quart.serving').setLevel(logging.ERROR)
 
 
 @quart.route('/metrics')

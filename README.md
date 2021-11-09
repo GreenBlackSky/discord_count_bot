@@ -19,6 +19,8 @@ To start, add `config.env` file to the root. It must contain folowing parameters
 * POSTGRES_PORT
 * PGADMIN_DEFAULT_EMAIL
 * PGADMIN_DEFAULT_PASSWORD
+* GF_SECURITY_ADMIN_USER
+* GF_SECURITY_ADMIN_PASSWORD
 
 Than, simply run `docker-compose -f "docker-compose.yaml" up -d --build` to build docker containers and run bot.
 
@@ -51,6 +53,8 @@ There are some ways to monitor bot's activity.
   * number of wrong commands (like when someone asks bot to spot, while it is not counting)
   * distribution of count values
 
+* Grafana is a way to visualize data from prometheus. Go to http://localhost:3000/ , log in useing creds from `GF_SECURITY_ADMIN_USER` and `GF_SECURITY_ADMIN_PASSWORD`, proceed to bot_dashboard and enjoy the view.
+
 ## Database structure
 
 Database has three tables:
@@ -66,4 +70,5 @@ Bot is container-based application. It is consists of following containers:
 * bot - python 3.9-slim-buster based container, that contains all application logic. While bot is in development, folder with code is not copied, but mapped as a volume. This way there is no need to rebuild whole container every time we change code. Upon release, though, source code should be copied into container.
 * postgres - standart postgresql container. Only interesting bit here is an `init.sql` file, that contains database structure.
 * pgadmin - it contains tool to administrate local database.
-* prometheus - monitoring tool, in development.
+* prometheus - monitoring tool, scraps metrics from bot.
+* grafana - visualisation tool for prometheus metrics.
